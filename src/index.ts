@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { errorHandler } from "./middlewares/errorHandler";
 import authRoutes from "./routes/auth.routes";
+import projectRoutes from "./routes/project.routes";
+import taskRoutes from "./routes/task.routes";
 
 dotenv.config();
 
@@ -17,6 +19,8 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/projects/:projectId/tasks", taskRoutes);
 
 app.use(errorHandler);
 
