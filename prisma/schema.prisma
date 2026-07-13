@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+// Utilisateur : peut posséder des projets, participer à des projets, et être assigné à des tâches
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+
+  ownedProjects Project[]       @relation("ProjectOwner")
+  memberships   Participant[]
+  assignedTasks Task[]
+
+  @@map("users")
+}
+
+
+// Projet : appartient à un propriétaire (User), contient des tâches et des participants
+model Project {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+
+  ownerId String
+  owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  tasks        Task[]
+  participants Participant[]
+
+  @@map("projects")
+}
+
+
+// Participant : table de liaison entre User et Project (un user peut être participant de plusieurs projets, un projet peut avoir plusieurs participants)
+model Participant {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId]) // un user ne peut être ajouté qu'une fois par projet
+  @@map("participants")
+}
+
+
+// Statut possible d'une tâche
+enum TaskStatus {
+  A_FAIRE
+  EN_COURS
+  TERMINE
+}
+
+// Tâche : rattachée à un projet, peut être assignée à un utilisateur (participant)
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String
+  status      TaskStatus @default(A_FAIRE)
+  createdAt   DateTime   @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+
+  @@map("tasks")
+}
