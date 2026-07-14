@@ -81,8 +81,16 @@ export async function removeParticipant(req: AuthRequest, res: Response, next: N
             return res.status(404).json({ error: "Projet introuvable" });
         }
 
-        if (project.ownerId !== req.userId) {
-            return res.status(403).json({ error: "Seul le propriétaire peut retirer un participant" });
+        const participant = await prisma.participant.findUnique({ where: { id: participantId } });
+        if (!participant) {
+            return res.status(404).json({ error: "Participant introuvable" });
+        }
+
+        const isOwner = project.ownerId === req.userId;
+        const isSelf = participant.userId === req.userId;
+
+        if (!isOwner && !isSelf) {
+            return res.status(403).json({ error: "Non autorisé à retirer ce participant" });
         }
 
         await prisma.participant.delete({ where: { id: participantId } });
