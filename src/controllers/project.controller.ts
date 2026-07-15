@@ -64,6 +64,13 @@ export async function getProjectById(req: AuthRequest, res: Response, next: Next
             return res.status(404).json({ error: "Projet introuvable" });
         }
 
+        const isOwner = project.ownerId === req.userId;
+        const isParticipant = project.participants.some((p) => p.userId === req.userId);
+
+        if (!isOwner && !isParticipant) {
+            return res.status(403).json({ error: "Accès refusé à ce projet" });
+        }
+
         res.json(project);
     } catch (err) {
         next(err);
