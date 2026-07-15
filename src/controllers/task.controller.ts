@@ -19,7 +19,7 @@ async function checkProjectAccess(projectId: string, userId: string) {
 export async function createTask(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         const { projectId } = req.params;
-        const { title, description, assignedToId } = req.body;
+        const { title, description } = req.body;
 
         if (!title || !description) {
             return res.status(400).json({ error: "title et description sont requis" });
@@ -30,24 +30,8 @@ export async function createTask(req: AuthRequest, res: Response, next: NextFunc
             return res.status(403).json({ error: "Accès refusé à ce projet" });
         }
 
-        // si un assigné est fourni, vérifier que c'est bien un participant (ou le owner)
-        if (assignedToId) {
-            const isValidAssignee =
-                assignedToId === project.ownerId ||
-                project.participants.some((p) => p.userId === assignedToId);
-
-            if (!isValidAssignee) {
-                return res.status(400).json({ error: "L'utilisateur assigné n'est pas participant du projet" });
-            }
-        }
-
         const task = await prisma.task.create({
-            data: {
-                title,
-                description,
-                projectId,
-                assignedToId: assignedToId || null,
-            },
+            data: { title, description, projectId },
         });
 
         res.status(201).json(task);
@@ -59,7 +43,7 @@ export async function createTask(req: AuthRequest, res: Response, next: NextFunc
 export async function getTasks(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         const { projectId } = req.params;
-        const { status } = req.query; // filtre optionnel ?status=EN_COURS
+        const { status, search } = req.query;
 
         const project = await checkProjectAccess(projectId, req.userId!);
         if (!project) {
@@ -70,9 +54,12 @@ export async function getTasks(req: AuthRequest, res: Response, next: NextFuncti
             where: {
                 projectId,
                 ...(status ? { status: status as any } : {}),
+                ...(search ? { title: { contains: search as string } } : {}),
             },
             include: {
-                assignedTo: { select: { id: true, name: true, email: true } },
+                assignees: {
+                    include: { user: { select: { id: true, name: true, email: true } } },
+                },
             },
         });
 
@@ -85,7 +72,7 @@ export async function getTasks(req: AuthRequest, res: Response, next: NextFuncti
 export async function updateTask(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         const { taskId } = req.params;
-        const { title, description, status, assignedToId } = req.body;
+        const { title, description, status } = req.body;
 
         const task = await prisma.task.findUnique({ where: { id: taskId } });
         if (!task) {
@@ -103,7 +90,6 @@ export async function updateTask(req: AuthRequest, res: Response, next: NextFunc
                 ...(title !== undefined && { title }),
                 ...(description !== undefined && { description }),
                 ...(status !== undefined && { status }),
-                ...(assignedToId !== undefined && { assignedToId }),
             },
         });
 
@@ -127,9 +113,55 @@ export async function deleteTask(req: AuthRequest, res: Response, next: NextFunc
             return res.status(403).json({ error: "Accès refusé à ce projet" });
         }
 
+        await prisma.taskAssignee.deleteMany({ where: { taskId } });
         await prisma.task.delete({ where: { id: taskId } });
 
         res.status(204).send();
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function setTaskAssignees(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+        const { taskId } = req.params;
+        const { userIds } = req.body as { userIds: string[] };
+
+        if (!Array.isArray(userIds)) {
+            return res.status(400).json({ error: "userIds doit être un tableau" });
+        }
+
+        const task = await prisma.task.findUnique({ where: { id: taskId } });
+        if (!task) {
+            return res.status(404).json({ error: "Tâche introuvable" });
+        }
+
+        const project = await checkProjectAccess(task.projectId, req.userId!);
+        if (!project) {
+            return res.status(403).json({ error: "Accès refusé à ce projet" });
+        }
+
+        const validIds = new Set([project.ownerId, ...project.participants.map((p) => p.userId)]);
+        const invalid = userIds.filter((id) => !validIds.has(id));
+        if (invalid.length > 0) {
+            return res.status(400).json({ error: "Un ou plusieurs utilisateurs ne font pas partie du projet" });
+        }
+
+        await prisma.taskAssignee.deleteMany({ where: { taskId } });
+        if (userIds.length > 0) {
+            await prisma.taskAssignee.createMany({
+                data: userIds.map((userId) => ({ taskId, userId })),
+            });
+        }
+
+        const updated = await prisma.task.findUnique({
+            where: { id: taskId },
+            include: {
+                assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+            },
+        });
+
+        res.json(updated);
     } catch (err) {
         next(err);
     }

@@ -5,10 +5,10 @@ import { AuthRequest } from "../middlewares/auth";
 export async function addParticipant(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         const { projectId } = req.params;
-        const { email } = req.body;
+        const { identifier } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ error: "email requis" });
+        if (!identifier) {
+            return res.status(400).json({ error: "email ou pseudo requis" });
         }
 
         const project = await prisma.project.findUnique({ where: { id: projectId } });
@@ -20,9 +20,16 @@ export async function addParticipant(req: AuthRequest, res: Response, next: Next
             return res.status(403).json({ error: "Seul le propriétaire peut ajouter des participants" });
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = identifier.includes("@")
+            ? await prisma.user.findUnique({ where: { email: identifier } })
+            : await prisma.user.findFirst({ where: { name: identifier } });
+
         if (!user) {
-            return res.status(404).json({ error: "Aucun utilisateur avec cet email" });
+            return res.status(404).json({ error: "Aucun utilisateur trouvé avec cet email ou ce pseudo" });
+        }
+
+        if (user.id === project.ownerId) {
+            return res.status(400).json({ error: "Le propriétaire est déjà membre du projet" });
         }
 
         const existing = await prisma.participant.findUnique({

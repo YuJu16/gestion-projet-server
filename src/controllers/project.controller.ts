@@ -26,7 +26,6 @@ export async function createProject(req: AuthRequest, res: Response, next: NextF
 
 export async function getProjects(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-        // projets où l'user est owner OU participant
         const projects = await prisma.project.findMany({
             where: {
                 OR: [
@@ -53,7 +52,11 @@ export async function getProjectById(req: AuthRequest, res: Response, next: Next
             include: {
                 owner: { select: { id: true, name: true, email: true } },
                 participants: { include: { user: { select: { id: true, name: true, email: true } } } },
-                tasks: true,
+                tasks: {
+                    include: {
+                        assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+                    },
+                },
             },
         });
 
@@ -104,7 +107,11 @@ export async function deleteProject(req: AuthRequest, res: Response, next: NextF
             return res.status(403).json({ error: "Seul le propriétaire peut supprimer ce projet" });
         }
 
-        // on supprime d'abord ce qui dépend du projet (contrainte de clé étrangère)
+        const taskIds = await prisma.task.findMany({
+            where: { projectId: req.params.id },
+            select: { id: true },
+        });
+        await prisma.taskAssignee.deleteMany({ where: { taskId: { in: taskIds.map((t) => t.id) } } });
         await prisma.task.deleteMany({ where: { projectId: req.params.id } });
         await prisma.participant.deleteMany({ where: { projectId: req.params.id } });
         await prisma.project.delete({ where: { id: req.params.id } });

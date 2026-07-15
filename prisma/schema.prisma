@@ -7,8 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-// Utilisateur : peut posséder des projets, participer à des projets, et être assigné à des tâches
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -16,15 +14,13 @@ model User {
   name      String
   createdAt DateTime @default(now())
 
-  ownedProjects Project[]       @relation("ProjectOwner")
-  memberships   Participant[]
-  assignedTasks Task[]
+  ownedProjects   Project[]       @relation("ProjectOwner")
+  memberships     Participant[]
+  taskAssignments TaskAssignee[]
 
   @@map("users")
 }
 
-
-// Projet : appartient à un propriétaire (User), contient des tâches et des participants
 model Project {
   id          String   @id @default(uuid())
   title       String
@@ -40,8 +36,6 @@ model Project {
   @@map("projects")
 }
 
-
-// Participant : table de liaison entre User et Project (un user peut être participant de plusieurs projets, un projet peut avoir plusieurs participants)
 model Participant {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -52,19 +46,16 @@ model Participant {
   projectId String
   project   Project @relation(fields: [projectId], references: [id])
 
-  @@unique([userId, projectId]) // un user ne peut être ajouté qu'une fois par projet
+  @@unique([userId, projectId])
   @@map("participants")
 }
 
-
-// Statut possible d'une tâche
 enum TaskStatus {
   A_FAIRE
   EN_COURS
   TERMINE
 }
 
-// Tâche : rattachée à un projet, peut être assignée à un utilisateur (participant)
 model Task {
   id          String     @id @default(uuid())
   title       String
@@ -75,8 +66,20 @@ model Task {
   projectId String
   project   Project @relation(fields: [projectId], references: [id])
 
-  assignedToId String?
-  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  assignees TaskAssignee[]
 
   @@map("tasks")
+}
+
+model TaskAssignee {
+  id String @id @default(uuid())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+  @@map("task_assignees")
 }
