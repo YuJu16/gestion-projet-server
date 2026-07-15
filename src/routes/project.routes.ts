@@ -10,7 +10,7 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(requireAuth); // toutes les routes projets nécessitent d'être connecté
 
 router.post("/", createProject);
 router.get("/", getProjects);
