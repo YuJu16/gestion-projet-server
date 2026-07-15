@@ -52,7 +52,11 @@ export async function getProjectById(req: AuthRequest, res: Response, next: Next
             include: {
                 owner: { select: { id: true, name: true, email: true } },
                 participants: { include: { user: { select: { id: true, name: true, email: true } } } },
-                tasks: true,
+                tasks: {
+                    include: {
+                        assignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+                    },
+                },
             },
         });
 
@@ -103,6 +107,11 @@ export async function deleteProject(req: AuthRequest, res: Response, next: NextF
             return res.status(403).json({ error: "Seul le propriétaire peut supprimer ce projet" });
         }
 
+        const taskIds = await prisma.task.findMany({
+            where: { projectId: req.params.id },
+            select: { id: true },
+        });
+        await prisma.taskAssignee.deleteMany({ where: { taskId: { in: taskIds.map((t) => t.id) } } });
         await prisma.task.deleteMany({ where: { projectId: req.params.id } });
         await prisma.participant.deleteMany({ where: { projectId: req.params.id } });
         await prisma.project.delete({ where: { id: req.params.id } });
