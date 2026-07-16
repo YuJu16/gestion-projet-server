@@ -19,10 +19,10 @@ async function checkProjectAccess(projectId: string, userId: string) {
 export async function createTask(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         const { projectId } = req.params;
-        const { title, description } = req.body;
+        const { title, description, status } = req.body;
 
-        if (!title || !description) {
-            return res.status(400).json({ error: "title et description sont requis" });
+        if (!title) {
+            return res.status(400).json({ error: "title est requis" });
         }
 
         const project = await checkProjectAccess(projectId, req.userId!);
@@ -31,7 +31,12 @@ export async function createTask(req: AuthRequest, res: Response, next: NextFunc
         }
 
         const task = await prisma.task.create({
-            data: { title, description, projectId },
+            data: {
+                title,
+                description: description || "",
+                projectId,
+                ...(status && { status }),
+            },
         });
 
         res.status(201).json(task);

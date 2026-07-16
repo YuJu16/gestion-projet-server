@@ -100,7 +100,12 @@ export async function removeParticipant(req: AuthRequest, res: Response, next: N
             return res.status(403).json({ error: "Non autorisé à retirer ce participant" });
         }
 
-        await prisma.participant.delete({ where: { id: participantId } });
+        await prisma.$transaction([
+            prisma.taskAssignee.deleteMany({
+                where: { userId: participant.userId, task: { projectId } },
+            }),
+            prisma.participant.delete({ where: { id: participantId } }),
+        ]);
 
         res.status(204).send();
     } catch (err) {
